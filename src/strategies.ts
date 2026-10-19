@@ -65,8 +65,9 @@ export class FiltragemColaborativaStrategy implements EstrategiaRecomendacao {
         profissionalId: profissional.id,
         papel,
         score: Number((
-          (profissional.avaliacoes.reduce((total, valor) => total + valor, 0) / Math.max(profissional.avaliacoes.length, 1) / 5) * 0.7
-          + Math.min(profissional.historicoProjetos / 20, 1) * 0.3
+          profissional.avaliacoes.reduce((total, valor) => total + valor, 0)
+          / Math.max(profissional.avaliacoes.length, 1)
+          / 5
         ).toFixed(3)),
         justificativa: `${profissional.nome} foi avaliado em projetos anteriores com foco em ${papel}.`,
       }))

@@ -68,7 +68,6 @@ export const substituirProfissional = (
       duracaoEstimada: 90,
       orcamentoTotal: 100000,
       dataEntrega: '2026-12-15',
-      localizacao: 'São Paulo',
       papeisObrigatorios: [{ papel, nivelObrigatorio: 3 }],
     },
     candidatos,

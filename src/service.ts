@@ -29,7 +29,6 @@ export const createDefaultProject = (): Projeto => ({
   duracaoEstimada: 90,
   orcamentoTotal: 120000,
   dataEntrega: '2026-12-15',
-  localizacao: 'São Paulo',
   papeisObrigatorios: [
     { papel: 'diretor', nivelObrigatorio: 4 },
     { papel: 'diretorDeFotografia', nivelObrigatorio: 4 },
@@ -51,10 +50,7 @@ export const createDefaultProfessionals = (): Profissional[] => [
     ],
     valorMedio: 8000,
     disponibilidadeTempo: 6,
-    localizacao: 'São Paulo',
-    historicoProjetos: 12,
     avaliacoes: [5, 4, 5, 5],
-    foraDoOrcamento: false,
   },
   {
     id: 'p2',
@@ -66,10 +62,7 @@ export const createDefaultProfessionals = (): Profissional[] => [
     ],
     valorMedio: 6750,
     disponibilidadeTempo: 4,
-    localizacao: 'Rio de Janeiro',
-    historicoProjetos: 9,
     avaliacoes: [4, 5, 4, 5],
-    foraDoOrcamento: false,
   },
   {
     id: 'p3',
@@ -81,10 +74,7 @@ export const createDefaultProfessionals = (): Profissional[] => [
     ],
     valorMedio: 6000,
     disponibilidadeTempo: 3,
-    localizacao: 'Belo Horizonte',
-    historicoProjetos: 8,
     avaliacoes: [5, 5, 4, 5],
-    foraDoOrcamento: false,
   },
   {
     id: 'p4',
@@ -95,10 +85,7 @@ export const createDefaultProfessionals = (): Profissional[] => [
     ],
     valorMedio: 9000,
     disponibilidadeTempo: 5,
-    localizacao: 'Curitiba',
-    historicoProjetos: 11,
     avaliacoes: [4, 5, 4, 4],
-    foraDoOrcamento: false,
   },
 ];
 

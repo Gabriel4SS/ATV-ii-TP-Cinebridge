@@ -6,6 +6,8 @@ export type Papel =
   | 'roteirista'
   | 'especialistaEmEfeitosVisuais';
 
+export type TipoProjeto = 'documentario' | 'animacao' | 'publicitario';
+
 export interface Competencia {
   nome: Papel;
   nivel: number;
@@ -18,11 +20,11 @@ export interface PapelObrigatorio {
 
 export interface Projeto {
   id: string;
+  tipoProjeto?: TipoProjeto;
   genero: string;
   duracaoEstimada: number;
   orcamentoTotal: number;
   dataEntrega: string;
-  localizacao: string;
   papeisObrigatorios: PapelObrigatorio[];
 }
 
@@ -33,10 +35,7 @@ export interface Profissional {
   competencias: Competencia[];
   valorMedio: number;
   disponibilidadeTempo: number;
-  localizacao: string;
-  historicoProjetos: number;
   avaliacoes: number[];
-  foraDoOrcamento: boolean;
 }
 
 export interface Recomendacao {

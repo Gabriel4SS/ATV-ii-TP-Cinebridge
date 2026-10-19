@@ -19,6 +19,7 @@ import {
   buildApp,
   createDefaultProject,
   createDefaultProfessionals,
+  createProjectFactory,
   gerarConvites,
   getDefaultStrategy,
   responderConvite,
@@ -51,13 +52,29 @@ describe('Cinebridge core architecture', () => {
     project.papeisObrigatorios = [{ papel: 'diretor', nivelObrigatorio: 5 }];
     const professionals = createDefaultProfessionals().filter((professional) => professional.id === 'p4');
 
-    const result = new OrquestradorPadrao().montarEquipe(
+    const result = new OrquestradorPadrao(createProjectFactory('documentario')).montarEquipe(
       project,
       professionals,
       new CossenoStrategy(),
     );
 
     expect(result).toHaveLength(0);
+  });
+
+  it('não deve recomendar alguém abaixo do nível para um papel específico', () => {
+    const project = createDefaultProject();
+    project.papeisObrigatorios = [
+      { papel: 'diretor', nivelObrigatorio: 4 },
+      { papel: 'roteirista', nivelObrigatorio: 5 },
+    ];
+
+    const result = new OrquestradorPadrao(createProjectFactory('documentario')).montarEquipe(
+      project,
+      createDefaultProfessionals(),
+      new CossenoStrategy(),
+    );
+
+    expect(result.some((item) => item.profissionalId === 'p1' && item.papel === 'roteirista')).toBe(false);
   });
 
   it('deve manter o custo total da equipe dentro do orçamento do projeto', () => {
@@ -68,7 +85,7 @@ describe('Cinebridge core architecture', () => {
       professional.especialidades.includes('diretor'),
     );
 
-    const result = new (class extends EquipeOrquestrador {})().montarEquipe(
+    const result = new OrquestradorPadrao(createProjectFactory('documentario')).montarEquipe(
       project,
       professionals,
       new CossenoStrategy(),
@@ -82,7 +99,7 @@ describe('Cinebridge core architecture', () => {
   it('deve montar uma equipe com o orquestrador padrão', () => {
     const project = createDefaultProject();
     const professionals = createDefaultProfessionals();
-    const result = new (class extends EquipeOrquestrador {})().montarEquipe(
+    const result = new OrquestradorPadrao(createProjectFactory('documentario')).montarEquipe(
       project,
       professionals,
       new CossenoStrategy(),
@@ -97,6 +114,10 @@ describe('Cinebridge core architecture', () => {
     const professionals = createDefaultProfessionals();
 
     class TestOrquestrador extends EquipeOrquestrador {
+      constructor() {
+        super(createProjectFactory('documentario'));
+      }
+
       protected normalizarProjeto(projeto: typeof project) {
         return { ...projeto, papeisObrigatorios: [...projeto.papeisObrigatorios] };
       }
@@ -167,7 +188,7 @@ describe('Cinebridge core architecture', () => {
     subject.adicionarObservador(notificadorEmail);
     const service = new CinebridgeService(
       new CossenoStrategy(),
-      new OrquestradorPadrao(),
+      new OrquestradorPadrao(createProjectFactory('documentario')),
       subject,
     );
 
@@ -263,6 +284,96 @@ describe('Cinebridge HTTP integration', () => {
       estrategia: 'regras-de-negocio',
     });
 
+    await app.close();
+  });
+
+  it('deve aceitar o modelo enxuto de projeto e profissional', async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recomendacao',
+      payload: {
+        tipoProjeto: 'documentario',
+        projeto: {
+          id: 'doc-minimo',
+          tipoProjeto: 'documentario',
+          genero: 'documentário',
+          duracaoEstimada: 20,
+          orcamentoTotal: 20000,
+          dataEntrega: '2027-12-31',
+          papeisObrigatorios: [{ papel: 'diretor', nivelObrigatorio: 4 }],
+        },
+        profissionais: [{
+          id: 'director-01',
+          nome: 'Diretor de Exemplo',
+          especialidades: ['diretor'],
+          competencias: [{ nome: 'diretor', nivel: 5 }],
+          valorMedio: 12000,
+          disponibilidadeTempo: 1,
+          avaliacoes: [4, 5, 5],
+        }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().projetoId).toBe('doc-minimo');
+    expect(response.json().validacao.ok).toBe(true);
+    expect(response.json().recomendacoes).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it.each([
+    ['documentario', 'filtragem-colaborativa', 'NotificadorEmail'],
+    ['animacao', 'cosseno', 'NotificacaoInterno'],
+    ['publicitario', 'regras-de-negocio', 'AuditoriaRecomendacao'],
+  ] as const)('deve selecionar a família da fábrica para %s', async (tipoProjeto, estrategia, notificador) => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recomendacao',
+      payload: { tipoProjeto },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      tipoProjeto,
+      estrategia,
+      notificador,
+      validacao: { ok: true },
+    });
+    expect(response.json().recomendacoes.length).toBeGreaterThan(0);
+    expect(response.json().notificacaoObservada).toContain('Equipe recomendada');
+
+    await app.close();
+  });
+
+  it('deve rejeitar tipo de projeto não suportado', async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recomendacao',
+      payload: { tipoProjeto: 'videoclipe' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toContain('tipoProjeto');
+    await app.close();
+  });
+
+  it('deve inferir fábrica pelo gênero quando tipoProjeto não é enviado', async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recomendacao',
+      payload: { projeto: { ...createDefaultProject(), genero: 'animação' } },
+    });
+
+    expect(response.json()).toMatchObject({
+      tipoProjeto: 'animacao',
+      estrategia: 'cosseno',
+      notificador: 'NotificacaoInterno',
+    });
     await app.close();
   });
 

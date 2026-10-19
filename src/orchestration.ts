@@ -1,15 +1,24 @@
 import type { EstrategiaRecomendacao, Projeto, Profissional, Recomendacao } from './types.js';
+import type { FabricaProjeto } from './factories.js';
 
 export abstract class EquipeOrquestrador {
+  constructor(private readonly fabrica: FabricaProjeto) {}
+
   public montarEquipe(
     projeto: Projeto,
     profissionais: Profissional[],
-    estrategia: EstrategiaRecomendacao,
+    estrategia?: EstrategiaRecomendacao,
   ): Recomendacao[] {
+    const estrategiaAtiva = estrategia ?? this.fabrica.criarRecomendador();
+
+    if (!this.fabrica.criarValidador().visitarProjeto(projeto, profissionais).ok) {
+      return [];
+    }
+
     const projetoNormalizado = this.normalizarProjeto(projeto);
     const candidatosValidos = this.validarRestricoes(projetoNormalizado, profissionais);
     const candidatosSelecionados = this.selecionarCandidatos(projetoNormalizado, candidatosValidos);
-    const recomendacoes = this.analisarRecomendacoes(projetoNormalizado, candidatosSelecionados, estrategia);
+    const recomendacoes = this.analisarRecomendacoes(projetoNormalizado, candidatosSelecionados, estrategiaAtiva);
 
     return this.posProcessar(recomendacoes, projetoNormalizado, candidatosSelecionados);
   }
@@ -46,7 +55,13 @@ export abstract class EquipeOrquestrador {
     const recomendacoes: Recomendacao[] = [];
 
     for (const papel of projeto.papeisObrigatorios) {
-      const itens = estrategia.recomendarPorPapel(projeto, profissionais, papel.papel);
+      const candidatosDoPapel = profissionais.filter((profissional) =>
+        profissional.especialidades.includes(papel.papel)
+        && profissional.competencias.some((competencia) =>
+          competencia.nome === papel.papel && competencia.nivel >= papel.nivelObrigatorio,
+        ),
+      );
+      const itens = estrategia.recomendarPorPapel(projeto, candidatosDoPapel, papel.papel);
       recomendacoes.push(...itens.slice(0, 2));
     }
 

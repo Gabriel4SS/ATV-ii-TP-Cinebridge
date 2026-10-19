@@ -12,6 +12,17 @@ export class ValidacaoVisitor implements Visitante<{ ok: boolean; erros: string[
       const temCandidato = profissionais.some((profissional) => profissional.especialidades.includes(papel.papel));
       if (!temCandidato) {
         erros.push(`Nenhum profissional disponível para o papel ${papel.papel}.`);
+        continue;
+      }
+
+      const temNivelNecessario = profissionais.some((profissional) =>
+        profissional.especialidades.includes(papel.papel)
+        && profissional.competencias.some((competencia) =>
+          competencia.nome === papel.papel && competencia.nivel >= papel.nivelObrigatorio,
+        ),
+      );
+      if (!temNivelNecessario) {
+        erros.push(`Nenhum profissional atende ao nível exigido para o papel ${papel.papel}.`);
       }
     }
 

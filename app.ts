@@ -9,6 +9,7 @@ import {
   NotificacaoAssunto,
 } from './src/observers.js';
 import { OrquestradorPadrao } from './src/orchestration.js';
+import { createProjectFactory, resolveTipoProjeto } from './src/factories.js';
 import {
   CinebridgeService,
   createDefaultProfessionals,
@@ -33,8 +34,17 @@ export type {
   Profissional,
   Projeto,
   Recomendacao,
+  TipoProjeto,
   Visitante,
 } from './src/types.js';
+
+export {
+  FabricaAnimacao,
+  FabricaDocumentario,
+  FabricaPublicitario,
+  createProjectFactory,
+} from './src/factories.js';
+export { ProjetoAnimacao, ProjetoDocumentario, ProjetoPrototype, ProjetoPublicitario } from './src/prototypes.js';
 
 export {
   AuditoriaRecomendacao,
@@ -83,7 +93,8 @@ export const buildApp = async (): Promise<FastifyInstance> => {
   app.get('/observer', async () => {
     const projeto = createDefaultProject();
     const profissionais = createDefaultProfessionals();
-    const recomendacoes = new OrquestradorPadrao().montarEquipe(
+    const fabrica = createProjectFactory('documentario');
+    const recomendacoes = new OrquestradorPadrao(fabrica).montarEquipe(
       projeto,
       profissionais,
       getDefaultStrategy('cosseno'),
@@ -159,12 +170,12 @@ export const buildApp = async (): Promise<FastifyInstance> => {
   });
 
   app.get('/orquestrador', async () => {
-    const projeto = createDefaultProject();
+    const fabrica = createProjectFactory('documentario');
+    const projeto = fabrica.criarProjeto({ id: 'proj-001' });
     const profissionais = createDefaultProfessionals();
-    const recomendacoes = new OrquestradorPadrao().montarEquipe(
+    const recomendacoes = new OrquestradorPadrao(fabrica).montarEquipe(
       projeto,
       profissionais,
-      getDefaultStrategy('cosseno'),
     );
     const ids = new Set(recomendacoes.map((item) => item.profissionalId));
     const custoTotal = [...ids].reduce((total, id) => {
@@ -218,7 +229,8 @@ export const buildApp = async (): Promise<FastifyInstance> => {
   app.get('/workflow', async () => {
     const projeto = createDefaultProject();
     const profissionais = createDefaultProfessionals();
-    const recomendacoes = new OrquestradorPadrao().montarEquipe(
+    const fabrica = createProjectFactory('documentario');
+    const recomendacoes = new OrquestradorPadrao(fabrica).montarEquipe(
       projeto,
       profissionais,
       getDefaultStrategy('cosseno'),
@@ -242,30 +254,51 @@ export const buildApp = async (): Promise<FastifyInstance> => {
     const body = request.body as {
       projeto?: import('./src/types.js').Projeto;
       profissionais?: import('./src/types.js').Profissional[];
+      tipoProjeto?: import('./src/types.js').TipoProjeto;
       estrategia?: 'cosseno' | 'filtragem-colaborativa' | 'regras-de-negocio';
     };
 
-    const projeto = body.projeto ?? createDefaultProject();
+    const tipoDeclarado = body.tipoProjeto ?? body.projeto?.tipoProjeto;
+    const tipoResolvido = resolveTipoProjeto(tipoDeclarado);
+
+    if (tipoDeclarado !== undefined && !tipoResolvido) {
+      return reply.code(400).send({ error: 'tipoProjeto deve ser documentario, animacao ou publicitario.' });
+    }
+
+    const tipoProjeto = tipoResolvido
+      ?? resolveTipoProjeto(body.projeto?.genero)
+      ?? 'documentario';
+    const fabrica = createProjectFactory(tipoProjeto);
+    const projeto = fabrica.criarProjeto({
+      ...(body.projeto ?? { id: 'proj-001' }),
+      tipoProjeto,
+    });
     const profissionais = body.profissionais ?? createDefaultProfessionals();
-    const estrategia = body.estrategia ?? 'cosseno';
+    const estrategia = body.estrategia
+      ? getDefaultStrategy(body.estrategia)
+      : fabrica.criarRecomendador();
 
     const notificacoes = new NotificacaoAssunto();
-    notificacoes.adicionarObservador(new NotificadorEmail());
-    notificacoes.adicionarObservador(new NotificacaoInterno());
-    notificacoes.adicionarObservador(new AuditoriaRecomendacao());
+    const notificador = fabrica.criarNotificador();
+    notificacoes.adicionarObservador(notificador);
 
     const service = new CinebridgeService(
-      getDefaultStrategy(estrategia),
-      new OrquestradorPadrao(),
+      estrategia,
+      new OrquestradorPadrao(fabrica),
       notificacoes,
     );
 
     const recomendacoes = service.recomendar(projeto, profissionais);
+    const validacao = fabrica.criarValidador().visitarProjeto(projeto, profissionais);
     const relatorio = new RelatorioVisitor().visitarProjeto(projeto, profissionais);
 
     return reply.code(200).send({
       projetoId: projeto.id,
-      estrategia,
+      tipoProjeto,
+      estrategia: estrategia.nome,
+      notificador: notificador.constructor.name,
+      notificacaoObservada: notificador.getUltimaMensagem(),
+      validacao,
       recomendacoes,
       relatorio,
     });
